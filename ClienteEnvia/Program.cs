@@ -1,8 +1,8 @@
 ﻿using System;
-using System.IO;
+using System.Text;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
+using System.IO;
 
 namespace ClienteEnvia
 {
@@ -10,56 +10,59 @@ namespace ClienteEnvia
     {
         static void Main(string[] args)
         {
-            FileStream infile; //in=input, objeto da classe filestream que representa o arquivo
-            String buffer = "";
+            Socket socketenviar = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.IP);
+            IPEndPoint endereco = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9060);
+
+            FileStream infile;
+            int tam, qtd;
+            String buffer = "", aux = "";
             String filename = "testeXML.xml";
 
-            int chave = 5;
-            int fatorCripto = 18 + chave;
+            infile = new System.IO.FileStream(filename, System.IO.FileMode.Open, System.IO.FileAccess.Read);
 
-            infile = new System.IO.FileStream(filename,
-                                   System.IO.FileMode.Open,
-                                   System.IO.FileAccess.Read);
-
-            for (int c = 0; c < infile.Length; ++c)
+            //Leitura do conteúdo
+            tam = (int)infile.Length;
+            for (int i = 0; i < tam; ++i)
             {
-                buffer += (char)infile.ReadByte(); // coloca conteúdo do arquivo em buffer
+                buffer += (char)infile.ReadByte(); // converte o valor lido para um caractere.
             }
             infile.Close();
 
+            Console.ReadKey();
+            socketenviar.SendTo(Encoding.ASCII.GetBytes(filename), endereco);
+            Console.WriteLine("FileName = " + filename);
 
-            Console.WriteLine("Tamanho em bytes = " + buffer.Length);
-            Console.WriteLine("Chars fragmentados de 10 em 10 bytes:");
+            qtd = tam / 10;
+            if (tam % 10 != 0) { ++qtd; }
 
-            String bufferCriptografado = "";
-            String buffer2 = "";
+            socketenviar.SendTo(Encoding.ASCII.GetBytes(qtd.ToString()), endereco);
+            Console.WriteLine("QtdDataGramas = " + qtd);
 
-            for (int i = 0, j = 1; i < buffer.Length; ++i, ++j)
+            int checksumPacote = 0;
+            for (int i = 0, j = 1; i < tam; ++i, ++j)
             {
-                char caractere = buffer[i];
-
-                // Criptografa o char
-                char charCriptografado = (char)(caractere + fatorCripto);
-                bufferCriptografado += charCriptografado;
-                buffer2 += charCriptografado;
+                aux += buffer[i];
+                checksumPacote += (byte)buffer[i];
 
                 if (j == 10)
                 {
-                    Console.WriteLine(buffer2);
+                    Console.WriteLine(aux);
+                    socketenviar.SendTo(Encoding.ASCII.GetBytes(aux), endereco);
                     j = 0;
-                    buffer2 = "";
+                    aux = "";
+
+                    socketenviar.SendTo(Encoding.ASCII.GetBytes(checksumPacote.ToString()), endereco);
+                    checksumPacote = 0;
                 }
             }
-
-
-            Console.ReadKey();
-
-            Socket socketenviar = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.IP); // conecta programa na rede
-            IPEndPoint endereco = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 9060); // endereço destinatário
-
-            socketenviar.SendTo(Encoding.UTF8.GetBytes(filename), endereco); //nome, codifica string num array de bytes - string -> array de bytes
-            socketenviar.SendTo(Encoding.UTF8.GetBytes(bufferCriptografado), endereco);   // conteúdo
+            if (tam % 10 != 0)
+            {
+                Console.WriteLine(aux);
+                socketenviar.SendTo(Encoding.ASCII.GetBytes(aux), endereco);
+                socketenviar.SendTo(Encoding.ASCII.GetBytes(checksumPacote.ToString()), endereco);
+            }
             socketenviar.Close();
+            Console.ReadKey();
         }
     }
 }
